@@ -421,34 +421,19 @@ function onStateClick(abbr){
 
   if(c.ownerId === p.id){
     selectedFriendly = c;
-    if(st) st.textContent = 'Attacking from [' + c.states.join(', ') + ']. Click an enemy clump.';
+    selectedEnemy2 = null;
+    if(st) st.textContent = selectedEnemy
+      ? 'Your clump vs [' + selectedEnemy.states.join(', ') + ']. Hit Confirm Battle.'
+      : 'Attacking from [' + c.states.join(', ') + ']. Now click an enemy (or an Attack button).';
   } else {
-    if(selectedEnemy && selectedEnemy.id === c.id){
-      selectedEnemy = selectedEnemy2;
-      selectedEnemy2 = null;
-    } else if(selectedEnemy2 && selectedEnemy2.id === c.id){
-      selectedEnemy2 = null;
-    } else if(!selectedEnemy){
-      selectedEnemy = c;
-    } else if(!selectedEnemy2){
-      if(c.ownerId === selectedEnemy.ownerId){
-        if(st) st.textContent = '2v1 must be two different players. Click another player\'s clump, or Confirm Battle.';
-        updateAttackUI(); colorMap(); renderMyClumps();
-        return;
-      }
-      selectedEnemy2 = c;
+    selectedEnemy = c;
+    selectedEnemy2 = null;
+    if(!selectedFriendly){
+      if(st) st.textContent = 'Enemy [' + c.states.join(', ') + '] picked. Now click YOUR clump.';
+    } else if(canTarget(selectedFriendly, selectedEnemy)){
+      if(st) st.textContent = 'Ready — hit Confirm Battle in the Attack panel.';
     } else {
-      if(c.ownerId === selectedEnemy.ownerId){
-        if(st) st.textContent = '2v1 must be two different players.';
-        updateAttackUI(); colorMap(); renderMyClumps();
-        return;
-      }
-      selectedEnemy2 = c;
-    }
-    if(selectedFriendly && !canTarget(selectedFriendly, c) && selectedEnemy && selectedEnemy.id===c.id){
-      if(st) st.textContent = 'Not adjacent. Arm Air Strike to hit far away, or pick another target.';
-    } else if(st){
-      st.textContent = selectedFriendly ? 'Ready — hit Confirm Battle.' : 'Enemy selected. Now click YOUR clump.';
+      if(st) st.textContent = 'Those clumps do not touch. Arm Air Strike, or pick a neighbor.';
     }
   }
   updateAttackUI(); colorMap(); renderMyClumps();
@@ -456,10 +441,13 @@ function onStateClick(abbr){
 
 function updateAttackUI(){
   const info = document.getElementById('attack-info');
-  const legal = selectedFriendly && selectedEnemy && canTarget(selectedFriendly, selectedEnemy) && (!selectedEnemy2 || canTarget(selectedFriendly, selectedEnemy2));
-  const can = selectedFriendly && selectedEnemy;
+  const can = !!(selectedFriendly && selectedEnemy);
+  const touching = can && canTarget(selectedFriendly, selectedEnemy) && (!selectedEnemy2 || canTarget(selectedFriendly, selectedEnemy2));
   const conf = document.getElementById('btn-confirm-battle');
-  if(conf) conf.disabled = !legal;
+  if(conf){
+    conf.disabled = !can;
+    conf.textContent = !can ? 'Confirm Battle' : (touching ? 'Confirm Battle' : 'Confirm (needs Air Strike)');
+  }
   if(can && selectedEnemy2){
     const fA = selectedFriendly.leader || fighters[selectedFriendly.states[0]];
     const fB = selectedEnemy.leader || fighters[selectedEnemy.states[0]];
@@ -518,7 +506,23 @@ function renderEnemyTargets(){
   });
 }
 
-document.getElementById('btn-confirm-battle').onclick = ()=> openFightOverlay();
+document.getElementById('btn-confirm-battle').onclick = ()=>{
+  if(!selectedFriendly || !selectedEnemy) return;
+  const needStrike = !canTarget(selectedFriendly, selectedEnemy) || (selectedEnemy2 && !canTarget(selectedFriendly, selectedEnemy2));
+  if(needStrike){
+    const p = players[currentPlayerIdx];
+    if(p && p.airstrikeTokens>0 && !airstrikeActive){
+      p.airstrikeTokens--;
+      airstrikeActive = true;
+      updateAirstrikeBtn();
+      log(p.name + ' spent Air Strike to reach a far clump');
+    } else if(!airstrikeActive){
+      document.getElementById('status').textContent = 'Not adjacent and no Air Strike token. Pick a touching clump.';
+      return;
+    }
+  }
+  openFightOverlay();
+};
 
 
 function snapshot(){
