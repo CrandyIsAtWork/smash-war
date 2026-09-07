@@ -331,6 +331,8 @@ function colorMap(){
     nodes.forEach(path => {
       path.style.fill = p ? p.color : '#555';
       path.style.pointerEvents = 'auto';
+      path.setAttribute('data-abbr', s.abbr);
+      path.onclick = (ev) => { ev.stopPropagation(); onStateClick(s.abbr); };
       path.classList.toggle('selected', !!(c && ((selectedFriendly&&selectedFriendly.id===c.id)||(selectedEnemy&&selectedEnemy.id===c.id)||(selectedEnemy2&&selectedEnemy2.id===c.id))));
       path.classList.toggle('weakened', !!(c && c.weakened));
       path.classList.toggle('legal', !!(selectedFriendly && c && canTarget(selectedFriendly, c)));
@@ -484,6 +486,36 @@ function updateAttackUI(){
     ${matchModifier?`<div style="color:#7afcff;margin-top:.3rem">${matchModifier}</div>`:''}`;
   } else if(selectedFriendly) info.textContent = `From ${selectedFriendly.states.join(', ')}. Click 1 or 2 enemy clumps.`;
   else info.textContent = 'Select your clump first.';
+  renderEnemyTargets();
+}
+
+function renderEnemyTargets(){
+  const box = document.getElementById('enemy-targets');
+  if(!box) return;
+  if(!selectedFriendly){
+    box.innerHTML = '<div style="color:#888;font-size:.8rem">Pick one of your clumps first. Attack buttons will show here.</div>';
+    return;
+  }
+  const targets = clumps.filter(c => canTarget(selectedFriendly, c));
+  if(!targets.length){
+    box.innerHTML = '<div style="color:#ffb703;font-size:.8rem">No adjacent enemy clumps. Pass, or arm Air Strike.</div>';
+    return;
+  }
+  box.innerHTML = targets.map(c => {
+    const owner = getPlayer(c.ownerId);
+    const f = c.leader || fighters[c.states[0]] || '';
+    const chosen = (selectedEnemy && selectedEnemy.id===c.id) || (selectedEnemy2 && selectedEnemy2.id===c.id);
+    return `<button type="button" class="enemy-target-btn" data-cid="${c.id}" style="text-align:left;${chosen?'outline:2px solid #00fff7':''}">
+      Attack ${owner?owner.name:'?'} — ${f} [${c.states.join(', ')}]
+    </button>`;
+  }).join('');
+  box.querySelectorAll('.enemy-target-btn').forEach(btn => {
+    btn.onclick = () => {
+      const c = clumps.find(x => x.id === +btn.dataset.cid);
+      if(!c) return;
+      onStateClick(c.states[0]);
+    };
+  });
 }
 
 document.getElementById('btn-confirm-battle').onclick = ()=> openFightOverlay();
@@ -1046,7 +1078,7 @@ function bindMapDelegate(){
     let el = ev.target;
     if(el && el.correspondingUseElement) el = el.correspondingUseElement;
     while(el && el !== wrap){
-      const id = el.getAttribute && (el.getAttribute('data-id') || el.getAttribute('id'));
+      const id = el.getAttribute && (el.getAttribute('data-abbr') || el.getAttribute('data-id') || el.getAttribute('id'));
       if(id && activeTerritories().some(t => t.abbr === id)){
         ev.preventDefault();
         onStateClick(id);

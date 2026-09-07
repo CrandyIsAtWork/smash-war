@@ -28,7 +28,8 @@ button:disabled{opacity:.4;cursor:not-allowed}
 
 @media(max-width:600px){}
 #map-container svg{width:100%;height:auto;display:block}
-#map-container path,#map-container polygon{stroke:#111;stroke-width:1.2;cursor:pointer;transition:fill .25s,stroke .15s;fill:#3a3a5a;pointer-events:auto}
+#map-container,#map-container svg,#map-container path,#map-container polygon{pointer-events:auto;cursor:pointer}
+#map-container path,#map-container polygon{stroke:#111;stroke-width:1.2;transition:fill .25s,stroke .15s;fill:#3a3a5a;touch-action:manipulation}
 #map-container path:hover{stroke:#00fff7;stroke-width:2}
 #map-container path.selected{stroke:#00fff7;stroke-width:3;filter:drop-shadow(0 0 5px #00fff7)}
 #map-container path.weakened{stroke:#ffb703;stroke-width:2.4;stroke-dasharray:4 3;filter:drop-shadow(0 0 4px #ffb703)}
