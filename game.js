@@ -86,7 +86,12 @@ function activeAdj(){
   return ADJ;
 }
 
-function portraitUrl(f){ const k = PORTRAIT[f]; return k ? 'portraits/'+k+'.png' : null; }
+function portraitUrl(f){
+  const c = customArt(f);
+  if(c && c.portrait) return c.portrait;
+  const k = PORTRAIT[f];
+  return k ? 'portraits/'+k+'.png' : null;
+}
 
 const ICON = {
   "Mario":"mario.png","Donkey Kong":"donkey_kong.png","Link":"link.png","Samus":"samus.png","Dark Samus":"dark_samus.png",
@@ -107,9 +112,64 @@ const ICON = {
   "Banjo & Kazooie":"banjo_and_kazooie.png","Terry":"Terry.png","Byleth":"byleth.png","Min Min":"minmin.png",
   "Steve":"steve.png","Sephiroth":"sephiroth.png","Pyra & Mythra":"homura.png.webp","Kazuya":"kazuya.png","Sora":"sora.png"
 };
-function iconUrl(f){ return ICON[f] ? 'icons/'+ICON[f] : null; }
+function iconUrl(f){
+  const c = customArt(f);
+  if(c && c.icon) return c.icon;
+  return ICON[f] ? 'icons/'+ICON[f] : null;
+}
 
 const FIGHTERS = ["Mario","Donkey Kong","Link","Samus","Dark Samus","Yoshi","Kirby","Fox","Pikachu","Luigi","Ness","Captain Falcon","Jigglypuff","Peach","Daisy","Bowser","Ice Climbers","Sheik","Zelda","Dr. Mario","Pichu","Falco","Marth","Lucina","Young Link","Ganondorf","Mewtwo","Roy","Chrom","Mr. Game & Watch","Meta Knight","Pit","Dark Pit","Zero Suit Samus","Wario","Snake","Ike","Pokemon Trainer","Diddy Kong","Lucas","Sonic","King Dedede","Olimar","Lucario","R.O.B.","Toon Link","Wolf","Villager","Mega Man","Wii Fit Trainer","Rosalina & Luma","Little Mac","Greninja","Palutena","Pac-Man","Robin","Shulk","Bowser Jr.","Duck Hunt","Ryu","Ken","Cloud","Corrin","Bayonetta","Inkling","Ridley","Simon","Richter","King K. Rool","Isabelle","Incineroar","Piranha Plant","Joker","Hero","Banjo & Kazooie","Terry","Byleth","Min Min","Steve","Sephiroth","Pyra & Mythra","Kazuya","Sora"];
+
+const DLC_FIGHTERS = ["Piranha Plant","Joker","Hero","Banjo & Kazooie","Terry","Byleth","Min Min","Steve","Sephiroth","Pyra & Mythra","Kazuya","Sora"];
+const DLC_GROUPS = [
+  {name:'Piranha Plant', fighters:['Piranha Plant']},
+  {name:'Fighters Pass 1', fighters:['Joker','Hero','Banjo & Kazooie','Terry','Byleth','Min Min']},
+  {name:'Fighters Pass 2', fighters:['Steve','Sephiroth','Pyra & Mythra','Kazuya','Sora']}
+];
+const BASE_FIGHTERS = FIGHTERS.filter(f => !DLC_FIGHTERS.includes(f));
+let enabledDlc = {};
+DLC_FIGHTERS.forEach(f => enabledDlc[f] = true);
+let customFighters = []; // {name, icon, portrait}
+
+function loadFighterSettings(){
+  try{
+    const raw = localStorage.getItem('smashWarFighters');
+    if(!raw) return;
+    const d = JSON.parse(raw);
+    if(d.enabledDlc) Object.keys(enabledDlc).forEach(k => { if(k in d.enabledDlc) enabledDlc[k] = !!d.enabledDlc[k]; });
+    if(Array.isArray(d.customFighters)) customFighters = d.customFighters.slice(0,20);
+  }catch(e){}
+}
+function saveFighterSettings(){
+  try{ localStorage.setItem('smashWarFighters', JSON.stringify({enabledDlc, customFighters})); }catch(e){ console.warn('fighter settings save failed', e); }
+}
+function customArt(name){ return customFighters.find(c => c.name === name); }
+function activeRoster(){
+  const dlc = DLC_FIGHTERS.filter(f => enabledDlc[f] !== false);
+  const customs = customFighters.map(c => c.name);
+  return BASE_FIGHTERS.concat(dlc).concat(customs);
+}
+function resizeImageFile(file, maxSide){
+  return new Promise((resolve, reject) => {
+    if(!file) return reject(new Error('No file'));
+    if(file.size > 6*1024*1024) return reject(new Error('Image too large (max 6MB)'));
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+    img.src = url;
+  });
+}
+
 const WHEEL = [
   {type:'advantage',title:'Damage Handicap on Opponent',desc:'Opponent starts at 50%.'},
   {type:'advantage',title:'Giant Form',desc:'You play as Giant.'},
@@ -216,7 +276,7 @@ document.getElementById('btn-start-draft').onclick = () => {
     fighters[abbr] = null;
   });
 
-  availableFighters = [...FIGHTERS];
+  availableFighters = activeRoster();
   for(let i=availableFighters.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [availableFighters[i],availableFighters[j]]=[availableFighters[j],availableFighters[i]]; }
   draftIdx = 0;
   historyStack = []; futureStack = [];
@@ -244,7 +304,7 @@ function renderDraft(){
 }
 
 function refillFighterPool(){
-  availableFighters = [...FIGHTERS];
+  availableFighters = activeRoster();
   for(let i=availableFighters.length-1;i>0;i--){
     const j=Math.floor(Math.random()*(i+1));
     [availableFighters[i],availableFighters[j]]=[availableFighters[j],availableFighters[i]];
@@ -899,7 +959,8 @@ function exportGameState(){
     version: 1,
     savedAt: new Date().toISOString(),
     players, clumps, nextClumpId, fighters, currentPlayerIdx,
-    matchModifier, airstrikeActive, gameLog, diceEnabled, weakenEnabled, currentMapId, enabledMemes
+    matchModifier, airstrikeActive, gameLog, diceEnabled, weakenEnabled, currentMapId, enabledMemes,
+    enabledDlc, customFighters
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
@@ -967,6 +1028,9 @@ function importGameState(data){
   diceEnabled = data.diceEnabled !== false;
   weakenEnabled = data.weakenEnabled !== false;
   currentMapId = data.currentMapId || 'usa';
+  if(data.enabledDlc) enabledDlc = Object.assign(enabledDlc, data.enabledDlc);
+  if(Array.isArray(data.customFighters)) customFighters = data.customFighters;
+  saveFighterSettings();
   enabledMemes = data.enabledMemes || enabledMemes;
   selectedFriendly = null;
   selectedEnemy = null;
@@ -1177,3 +1241,67 @@ if(memeDone && memeModal){
 if(memeModal){
   memeModal.addEventListener('click', e=>{ if(e.target===memeModal) memeModal.style.display='none'; });
 }
+
+function renderFighterModal(){
+  const dlcBox = document.getElementById('dlc-toggles');
+  if(dlcBox){
+    dlcBox.innerHTML = DLC_GROUPS.map((g,gi) => {
+      const on = g.fighters.every(f => enabledDlc[f] !== false);
+      const items = g.fighters.map(f => `<label style="margin-left:1rem"><input type="checkbox" data-f="${f}" ${enabledDlc[f]!==false?'checked':''}> ${f}</label>`).join('');
+      return `<label><input type="checkbox" data-group="${gi}" ${on?'checked':''}> <b>${g.name}</b></label>${items}`;
+    }).join('');
+    dlcBox.querySelectorAll('input[data-group]').forEach(inp => {
+      inp.onchange = () => {
+        DLC_GROUPS[+inp.dataset.group].fighters.forEach(f => enabledDlc[f] = inp.checked);
+        saveFighterSettings(); renderFighterModal();
+      };
+    });
+    dlcBox.querySelectorAll('input[data-f]').forEach(inp => {
+      inp.onchange = () => { enabledDlc[inp.dataset.f] = inp.checked; saveFighterSettings(); renderFighterModal(); };
+    });
+  }
+  const list = document.getElementById('custom-list');
+  if(list){
+    if(!customFighters.length) list.innerHTML = '<div style="color:#888;font-size:.85rem">No custom characters yet.</div>';
+    else list.innerHTML = customFighters.map((c,i) => `<div style="display:flex;align-items:center;gap:.5rem">
+      ${c.icon?`<img src="${c.icon}" alt="" style="width:28px;height:28px;object-fit:contain">`:''}
+      <span style="flex:1">${c.name}</span>
+      <button type="button" data-del="${i}">Remove</button>
+    </div>`).join('');
+    list.querySelectorAll('[data-del]').forEach(btn => {
+      btn.onclick = () => { customFighters.splice(+btn.dataset.del,1); saveFighterSettings(); renderFighterModal(); };
+    });
+  }
+}
+
+loadFighterSettings();
+
+const figBtn=document.getElementById('btn-fighter-settings');
+const figModal=document.getElementById('fighter-modal');
+const figDone=document.getElementById('btn-fighter-done');
+if(figBtn && figModal) figBtn.onclick=()=>{ renderFighterModal(); figModal.style.display='flex'; };
+if(figDone && figModal) figDone.onclick=()=> figModal.style.display='none';
+if(figModal) figModal.addEventListener('click', e=>{ if(e.target===figModal) figModal.style.display='none'; });
+
+const addCustom=document.getElementById('btn-add-custom');
+if(addCustom) addCustom.onclick = async () => {
+  const name = (document.getElementById('custom-name').value||'').trim();
+  const iconFile = document.getElementById('custom-icon').files[0];
+  const portFile = document.getElementById('custom-portrait').files[0];
+  if(!name){ alert('Enter a name'); return; }
+  if(activeRoster().some(f => f.toLowerCase()===name.toLowerCase()) || FIGHTERS.some(f => f.toLowerCase()===name.toLowerCase())){
+    alert('That name is already in the roster'); return;
+  }
+  if(customFighters.length >= 20){ alert('Max 20 custom characters'); return; }
+  if(!iconFile || !portFile){ alert('Need both a stock icon and a portrait'); return; }
+  try{
+    const icon = await resizeImageFile(iconFile, 256);
+    const portrait = await resizeImageFile(portFile, 640);
+    customFighters.push({name, icon, portrait});
+    saveFighterSettings();
+    document.getElementById('custom-name').value='';
+    document.getElementById('custom-icon').value='';
+    document.getElementById('custom-portrait').value='';
+    renderFighterModal();
+  }catch(err){ alert(err.message || 'Could not add character'); }
+};
