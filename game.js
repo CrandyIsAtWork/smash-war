@@ -243,22 +243,25 @@ function renderDraft(){
   if(p && p.isCPU && availableFighters.length && clump) setTimeout(()=> pickFighter(availableFighters[0]), 200);
 }
 
+function refillFighterPool(){
+  availableFighters = [...FIGHTERS];
+  for(let i=availableFighters.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [availableFighters[i],availableFighters[j]]=[availableFighters[j],availableFighters[i]];
+  }
+}
 function pickFighter(name){
   if(!availableFighters.includes(name)) return;
   const clump = clumps[draftIdx];
   if(!clump) return;
   fighters[clump.states[0]] = name;
   availableFighters = availableFighters.filter(f => f !== name);
+  if(!availableFighters.length) refillFighterPool();
   draftIdx++;
-  if(draftIdx >= clumps.length || !availableFighters.length){
+  if(draftIdx >= clumps.length){
     document.getElementById('btn-finish-draft').disabled = false;
     document.getElementById('draft-banner').textContent = 'Draft complete!';
-    // leftover states without fighters get random remaining
-    clumps.forEach(c => {
-      if(!fighters[c.states[0]] && availableFighters.length){
-        fighters[c.states[0]] = availableFighters.shift();
-      }
-    });
+    renderDraft();
   } else renderDraft();
 }
 
@@ -403,44 +406,47 @@ function canTarget(fromClump, toClump){
 
 function onStateClick(abbr){
   const c = getClumpByState(abbr);
+  const st = document.getElementById('status');
   if(!c){
-    const st = document.getElementById('status');
-    if(st) st.textContent = 'No clump on ' + abbr;
+    if(st) st.textContent = 'Nothing to select on ' + abbr;
     return;
   }
   const p = players[currentPlayerIdx];
   if(!p) return;
   if(selectedFriendly) selectedFriendly = clumps.find(x=>x.id===selectedFriendly.id) || selectedFriendly;
+  if(selectedEnemy) selectedEnemy = clumps.find(x=>x.id===selectedEnemy.id) || selectedEnemy;
+  if(selectedEnemy2) selectedEnemy2 = clumps.find(x=>x.id===selectedEnemy2.id) || selectedEnemy2;
+
   if(c.ownerId === p.id){
     selectedFriendly = c;
-    selectedEnemy = null;
-    selectedEnemy2 = null;
-    const st = document.getElementById('status');
-    if(st) st.textContent = 'Attacking from [' + c.states.join(', ') + ']. Now click an adjacent enemy.';
-  } else if(selectedFriendly){
-    if(!canTarget(selectedFriendly, c)){
-      document.getElementById('status').textContent = 'Not adjacent. Arm Air Strike to hit far away.';
-      return;
-    }
-    if(!selectedEnemy){
-      selectedEnemy = c;
-    } else if(selectedEnemy.id === c.id){
+    if(st) st.textContent = 'Attacking from [' + c.states.join(', ') + ']. Click an enemy clump.';
+  } else {
+    if(selectedEnemy && selectedEnemy.id === c.id){
       selectedEnemy = selectedEnemy2;
       selectedEnemy2 = null;
     } else if(selectedEnemy2 && selectedEnemy2.id === c.id){
       selectedEnemy2 = null;
+    } else if(!selectedEnemy){
+      selectedEnemy = c;
     } else if(!selectedEnemy2){
       if(c.ownerId === selectedEnemy.ownerId){
-        document.getElementById('status').textContent = '2v1 must be two different players.';
+        if(st) st.textContent = '2v1 must be two different players. Click another player\'s clump, or Confirm Battle.';
+        updateAttackUI(); colorMap(); renderMyClumps();
         return;
       }
       selectedEnemy2 = c;
     } else {
       if(c.ownerId === selectedEnemy.ownerId){
-        document.getElementById('status').textContent = '2v1 must be two different players.';
+        if(st) st.textContent = '2v1 must be two different players.';
+        updateAttackUI(); colorMap(); renderMyClumps();
         return;
       }
       selectedEnemy2 = c;
+    }
+    if(selectedFriendly && !canTarget(selectedFriendly, c) && selectedEnemy && selectedEnemy.id===c.id){
+      if(st) st.textContent = 'Not adjacent. Arm Air Strike to hit far away, or pick another target.';
+    } else if(st){
+      st.textContent = selectedFriendly ? 'Ready — hit Confirm Battle.' : 'Enemy selected. Now click YOUR clump.';
     }
   }
   updateAttackUI(); colorMap(); renderMyClumps();
@@ -448,9 +454,10 @@ function onStateClick(abbr){
 
 function updateAttackUI(){
   const info = document.getElementById('attack-info');
+  const legal = selectedFriendly && selectedEnemy && canTarget(selectedFriendly, selectedEnemy) && (!selectedEnemy2 || canTarget(selectedFriendly, selectedEnemy2));
   const can = selectedFriendly && selectedEnemy;
   const conf = document.getElementById('btn-confirm-battle');
-  if(conf) conf.disabled = !can;
+  if(conf) conf.disabled = !legal;
   if(can && selectedEnemy2){
     const fA = selectedFriendly.leader || fighters[selectedFriendly.states[0]];
     const fB = selectedEnemy.leader || fighters[selectedEnemy.states[0]];
@@ -716,7 +723,8 @@ updateAttackUI = function(){
 
 
 document.getElementById('btn-deal-remaining').onclick = () => {
-  while(draftIdx < clumps.length && availableFighters.length){
+  while(draftIdx < clumps.length){
+    if(!availableFighters.length) refillFighterPool();
     fighters[clumps[draftIdx].states[0]] = availableFighters.shift();
     draftIdx++;
   }
@@ -1120,3 +1128,16 @@ const bu=document.getElementById('btn-undo'); if(bu) bu.onclick=undoMove;
 const br=document.getElementById('btn-redo'); if(br) br.onclick=redoMove;
 
 try{ bindMapDelegate(); }catch(e){}
+
+const memeBtn=document.getElementById('btn-meme-settings');
+const memeModal=document.getElementById('meme-modal');
+const memeDone=document.getElementById('btn-meme-done');
+if(memeBtn && memeModal){
+  memeBtn.onclick=()=>{ memeModal.style.display='flex'; };
+}
+if(memeDone && memeModal){
+  memeDone.onclick=()=>{ memeModal.style.display='none'; };
+}
+if(memeModal){
+  memeModal.addEventListener('click', e=>{ if(e.target===memeModal) memeModal.style.display='none'; });
+}

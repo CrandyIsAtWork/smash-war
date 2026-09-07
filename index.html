@@ -113,9 +113,15 @@ button:disabled{opacity:.4;cursor:not-allowed}
         <option value="afghanistan">Afghanistan Provinces</option>
       </select>
     </label>
-    <div style="margin:.6rem 0">
-      <div style="font-size:.85rem;margin-bottom:.25rem">Enabled meme images</div>
-      <div id="meme-toggles" style="display:flex;flex-wrap:wrap;gap:.35rem .7rem;font-size:.8rem"></div>
+    <div class="btn-row" style="margin:.6rem 0">
+      <button type="button" id="btn-meme-settings">Enabled memes</button>
+    </div>
+    <div id="meme-modal" style="display:none;position:fixed;inset:0;z-index:30000;background:rgba(0,0,0,.75);align-items:center;justify-content:center;padding:1rem">
+      <div style="background:#101020;border:1px solid #ff2bd6;border-radius:10px;padding:1rem;max-width:420px;width:100%">
+        <h2 style="margin-top:0">Enabled memes</h2>
+        <div id="meme-toggles" style="display:flex;flex-direction:column;gap:.4rem;font-size:.9rem;max-height:50vh;overflow:auto"></div>
+        <div class="btn-row" style="margin-top:.8rem"><button type="button" id="btn-meme-done">Done</button></div>
+      </div>
     </div>
     <div class="btn-row">
       <button id="btn-start-draft">Start Character Draft</button>
